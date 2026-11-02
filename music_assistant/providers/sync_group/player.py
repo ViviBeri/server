@@ -1567,7 +1567,9 @@ class SyncGroupPlayer(Player):
         # serialize with (un)group and playback commands targeting this group.
         # A cancellation (playback resuming, an explicit stop or power command)
         # may still land while we wait for the lock and simply ends this task.
-        async with self.mass.players.get_player_lock(self.player_id, PlayerLockPurpose.PLAYBACK):
+        async with self.mass.players.get_player_lock(
+            self.player_id, PlayerLockPurpose.PLAYBACK
+        ):
             # drop our own reference first: the dissolve cancels any pending grace task
             self._idle_grace_task = None
             # re-check state at fire time — playback may have resumed, the user
