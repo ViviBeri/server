@@ -3821,6 +3821,43 @@ class TestStaticMemberRejoin:
         )
         mass.players._handle_play_media.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_rejoin_waits_for_group_announcement_lock(self) -> None:
+        """A pending member rejoin waits until a group announcement releases its lock."""
+        mass = _make_mock_mass()
+        sgp, leader, _display = _static_group_with_a_member_away(mass)
+        group_lock = asyncio.Lock()
+        leader_lock = asyncio.Lock()
+        await group_lock.acquire()
+
+        @asynccontextmanager
+        async def _get_player_lock(
+            player_id: str, _purpose: PlayerLockPurpose
+        ) -> AsyncIterator[None]:
+            lock = group_lock if player_id == sgp.player_id else leader_lock
+            async with lock:
+                yield
+
+        mass.players.get_player_lock = MagicMock(side_effect=_get_player_lock)
+        rejoin_task = asyncio.create_task(sgp._rejoin_members())
+        try:
+            await asyncio.sleep(0)
+            assert not rejoin_task.done()
+            mass.players._handle_set_members.assert_not_awaited()
+        finally:
+            group_lock.release()
+
+        await rejoin_task
+        mass.players.get_player_lock.assert_has_calls(
+            [
+                call(sgp.player_id, PlayerLockPurpose.PLAYBACK),
+                call(leader.player_id, PlayerLockPurpose.PLAYBACK),
+            ]
+        )
+        mass.players._handle_set_members.assert_awaited_once_with(
+            leader, player_ids_to_add=["display"]
+        )
+
     def test_members_the_leader_holds_are_not_rejoined(self) -> None:
         """A leader update with every member in place schedules nothing."""
         mass = _make_mock_mass()
