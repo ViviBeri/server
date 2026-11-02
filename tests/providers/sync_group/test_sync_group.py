@@ -3815,7 +3815,12 @@ class TestStaticMemberRejoin:
 
         await sgp._rejoin_members()
 
-        mass.players.get_player_lock.assert_called_once_with("leader", PlayerLockPurpose.PLAYBACK)
+        mass.players.get_player_lock.assert_has_calls(
+            [
+                call(sgp.player_id, PlayerLockPurpose.PLAYBACK),
+                call(leader.player_id, PlayerLockPurpose.PLAYBACK),
+            ]
+        )
         mass.players._handle_set_members.assert_awaited_once_with(
             leader, player_ids_to_add=["display"]
         )
