@@ -1627,29 +1627,37 @@ class SyncGroupPlayer(Player):
         """Re-add the configured members that returned to the live leader, playback untouched."""
         if (leader := self.sync_leader) is None:
             return
-        async with self.mass.players.get_player_lock(leader.player_id, PlayerLockPurpose.PLAYBACK):
-            # judged again now rather than when scheduled: in the meantime a member may
-            # have joined another group, which the controller's add would take it from,
-            # or the group may have been saved without it
-            if self.sync_leader is not leader:
-                return
-            if not (member_ids := self._missing_members(leader)):
-                return
-            self.logger.info("Re-adding %s to syncgroup %s", member_ids, self.display_name)
-            try:
-                await self.mass.players._handle_set_members(leader, player_ids_to_add=member_ids)
-            except PlayerCommandFailed as err:
-                self.logger.warning(
-                    "Could not re-add %s to syncgroup %s: %s", member_ids, self.display_name, err
-                )
-                return
-            # a form drops a member the leader can not group with at the time, and this
-            # add goes past set_members: track the member again so the next formation
-            # includes it. The leader may report the join only later, so this does not
-            # wait for it; a member the controller passed over is dropped by that form
-            for member_id in member_ids:
-                if member_id not in self._attr_group_members:
-                    self._attr_group_members.append(member_id)
+        # Group announcements hold the sync group's playback lock while they start
+        # the announcement stream. Rejoining a member concurrently can add it to an
+        # already-running Sonos AirPlay stream without starting that member's stream.
+        # Take the group lock before the leader lock, matching the announcement path's
+        # group-then-member lock order.
+        async with self.mass.players.get_player_lock(self.player_id, PlayerLockPurpose.PLAYBACK):
+            async with self.mass.players.get_player_lock(
+                leader.player_id, PlayerLockPurpose.PLAYBACK
+            ):
+                # judged again now rather than when scheduled: in the meantime a member may
+                # have joined another group, which the controller's add would take it from,
+                # or the group may have been saved without it
+                if self.sync_leader is not leader:
+                    return
+                if not (member_ids := self._missing_members(leader)):
+                    return
+                self.logger.info("Re-adding %s to syncgroup %s", member_ids, self.display_name)
+                try:
+                    await self.mass.players._handle_set_members(leader, player_ids_to_add=member_ids)
+                except PlayerCommandFailed as err:
+                    self.logger.warning(
+                        "Could not re-add %s to syncgroup %s: %s", member_ids, self.display_name, err
+                    )
+                    return
+                # a form drops a member the leader can not group with at the time, and this
+                # add goes past set_members: track the member again so the next formation
+                # includes it. The leader may report the join only later, so this does not
+                # wait for it; a member the controller passed over is dropped by that form
+                for member_id in member_ids:
+                    if member_id not in self._attr_group_members:
+                        self._attr_group_members.append(member_id)
 
     def _schedule_reform_timer(self) -> None:
         """(Re)schedule the debounced re-form after the sync leader was removed."""
