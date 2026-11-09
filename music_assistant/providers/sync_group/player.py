@@ -1634,7 +1634,7 @@ class SyncGroupPlayer(Player):
         # already-running Sonos AirPlay stream without starting that member's stream.
         # Take the group lock before the leader lock, matching the announcement path's
         # group-then-member lock order.
-        async with (
+            async with (
                 self.mass.players.get_player_lock(self.player_id, PlayerLockPurpose.PLAYBACK),
                 self.mass.players.get_player_lock(leader.player_id, PlayerLockPurpose.PLAYBACK),
             ):
