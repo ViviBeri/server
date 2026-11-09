@@ -1276,9 +1276,13 @@ class TestSetMembersDoesNotRegisterIncompatible:
         # and the leader was never asked to add it (the call may still happen
         # with empty lists since the member-changed path is taken, but the
         # incompatible id must not appear in either add or remove)
-        for call in mass.players._handle_set_members.await_args_list:
-            assert "incompatible" not in (call.kwargs.get("player_ids_to_add") or [])
-            assert "incompatible" not in (call.kwargs.get("player_ids_to_remove") or [])
+        for member_call in mass.players._handle_set_members.await_args_list:
+            assert "incompatible" not in (
+                member_call.kwargs.get("player_ids_to_add") or []
+            )
+            assert "incompatible" not in (
+                member_call.kwargs.get("player_ids_to_remove") or []
+            )
 
     @pytest.mark.asyncio
     async def test_compatible_member_is_registered_and_forwarded(self) -> None:
